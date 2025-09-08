@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>DomainLens – Brings hidden phishing domains into clear view.</title>
+  <meta name="description" content="A lightweight tool that unmasks deceptive domains by detecting confusable Unicode characters, decoding punycode, revealing code points, and generating look-alike variants for awareness and takedown efforts." />
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--muted:#9aa4b2;--accent:#7c3aed;--accent2:#06b6d4;--glass:rgba(255,255,255,0.03)}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial;background:linear-gradient(180deg,#061223 0%,#071025 100%);color:#e6eef8;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px}
+    .wrap{width:100%;max-width:1000px}
+    header{display:flex;align-items:center;gap:16px;margin-bottom:20px}
+    .logo{width:56px;height:56px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:800;color:#021;box-shadow:0 8px 30px rgba(12,18,30,0.6)}
+    h1{font-size:20px;margin:0}
+    p.lead{margin:0;color:var(--muted);font-size:13px}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border-radius:14px;padding:18px;box-shadow:0 8px 40px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.03)}
+    .grid{display:grid;grid-template-columns:1fr 380px;gap:16px}
+    @media(max-width:920px){.grid{grid-template-columns:1fr}}
+    .input-row{display:flex;gap:8px}
+    input[type=text], textarea{flex:1;padding:12px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:var(--glass);color:inherit;font-size:15px}
+    button.btn{background:linear-gradient(90deg,var(--accent),var(--accent2));border:none;padding:10px 14px;border-radius:10px;color:#021;font-weight:700;cursor:pointer}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted);padding:8px;border-radius:8px}
+    .muted{color:var(--muted);font-size:13px}
+    .panel{padding:12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03)}
+    .list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+    .item{padding:10px;border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent);display:flex;align-items:center;justify-content:space-between}
+    code{background:rgba(0,0,0,0.24);padding:4px 6px;border-radius:6px;font-size:13px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{padding:8px;border-bottom:1px dashed rgba(255,255,255,0.03);text-align:left}
+    .danger{color:#ffb4b4}
+    .ok{color:#bdf7c7}
+    footer{margin-top:12px;color:var(--muted);font-size:12px}
+    .small{font-size:12px;color:var(--muted)}
+    .chip{display:inline-block;padding:6px 8px;border-radius:999px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03);font-size:12px}
+    .copy{cursor:pointer;padding:6px;border-radius:8px}
+    .variants{display:flex;flex-direction:column;gap:6px;max-height:280px;overflow:auto;padding-right:6px}
+    .variant{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;background:rgba(255,255,255,0.01)}
+    .toggle-row{display:flex;gap:12px;margin-top:12px}
+    label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+    .status{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;font-weight:700}
+    .status.safe{background:rgba(34,197,94,0.12);color:#86efac;border:1px solid rgba(34,197,94,0.12)}
+    .status.warn{background:rgba(234,179,8,0.08);color:#facc15;border:1px solid rgba(234,179,8,0.08)}
+    .status.bad{background:rgba(239,68,68,0.06);color:#ffb4b4;border:1px solid rgba(239,68,68,0.06)}
+    .tools-section{margin-bottom:12px}
+    .table-results{max-height:250px;overflow:auto}
+    .quick-input {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: var(--glass);
+      color: inherit;
+      font-size: 14px;
+      transition: border 0.2s, box-shadow 0.2s;
+    }
+    .quick-input:focus {
+      outline: none;
+      border: 1px solid var(--accent2);
+      box-shadow: 0 0 0 2px rgba(6,182,212,0.4);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">HG</div>
+      <div>
+        <h1>Homoglyph & Punycode Domain Detector</h1>
+        <p class="lead">Free single-file tool to analyze domains for confusable Unicode characters, show punycode, code-points, and generate suspicious variants.</p>
+      </div>
+    </header>
+
+    <div class="card">
+      <div class="grid">
+        <div>
+          <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px">
+            <div style="flex:1" class="input-row">
+              <input id="domainInput" type="text" placeholder="Enter a domain (e.g. example.com or xn--...)">
+              <button class="btn" id="analyzeBtn">Analyze</button>
+            </div>
+            <div id="statusWrap"></div>
+          </div>
+
+          <div class="toggle-row">
+            <label><input type="checkbox" id="checkHomoglyph" checked> Check if it's Homoglyph URL</label>
+            <label><input type="checkbox" id="checkPunycode" checked> Find if the domain is Punycode</label>
+          </div>
+
+          <div style="display:flex;gap:12px;margin:20px 0">
+            <div class="panel" style="flex:1">
+              <div class="small">Unicode Form</div>
+              <div id="normalized" style="margin-top:6px;font-weight:700">—</div>
+            </div>
+            <div class="panel" style="width:220px">
+              <div class="small">Punycode (toASCII)</div>
+              <div id="punycode" style="margin-top:6px;font-weight:700">—</div>
+            </div>
+          </div>
+
+          <section class="panel" id="charSection" style="margin-bottom:12px;display:none">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <div><strong>Character analysis</strong> <span class="muted">(click any row to copy)</span></div>
+              <div class="chip" id="suspicionScore">Score: —</div>
+            </div>
+            <table id="charsTable"><thead><tr><th>Char</th><th>Code points</th><th>Category</th></tr></thead><tbody></tbody></table>
+          </section>
+
+          <section class="panel" id="variantsSection" style="margin-bottom:12px;display:none">
+            <div id="variantsHeader" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <div><strong>Suspicious variants</strong> <span class="muted">(single-substitution + common tricks)</span></div>
+              <div class="small" id="variantsToggleLabel">Click to expand ▼</div>
+            </div>
+            <div id="variantsContent" style="display:none">
+              <div id="variants" class="variants"></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <strong>Notes & advice</strong>
+            <ul class="list" style="margin-top:8px">
+              <li class="item"><div><strong>FAQ:</strong> If any label starts with <code>xn--</code>, the domain contains punycode (IDN).</div></li>
+              <li class="item"><div><strong>Advice:</strong> If you see confusable characters, don't click the link — type the destination manually or use a known bookmark.</div></li>
+                         </ul>
+          </section>
+        </div>
+
+        <aside>
+          <div class="panel tools-section" style="margin-bottom:12px">
+            <strong>Quick tools</strong>
+            <p class="small" style="margin-top:8px">Tools to generate homoglyph, punycode and typosquatting variants quickly. Click one to explore.</p>
+
+            <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
+              <button id="openMakeHomoglyph" class="btn">Make a homoglyph domain</button>
+              <div id="makeHomoglyphPanel" style="display:none;margin-top:8px">
+                <input id="makeHomInput" class="quick-input" placeholder="Enter real domain (e.g. yourcompany.com)" />
+                <div style="display:flex;gap:8px;margin-top:8px">
+                  <button id="genHomoglyphs" class="btn">Generate 10 variants</button>
+                  <button id="moreHomoglyphs" class="ghost">Generate more</button>
+                  <button id="copyHomList" class="ghost">Copy List</button>
+                </div>
+                <div class="table-results" style="margin-top:8px"><table id="homResults"><thead><tr><th>Variant</th><th>Punycode</th><th></th></tr></thead><tbody></tbody></table></div>
+              </div>
+
+              <button id="openMakePuny" class="btn" style="background:linear-gradient(90deg,var(--accent2),var(--accent))">Make punycode variants</button>
+              <div id="makePunyPanel" style="display:none;margin-top:8px">
+                <input id="makePunyInput" class="quick-input" placeholder="Enter domain (ASCII or Unicode)" />
+                <div style="display:flex;gap:8px;margin-top:8px">
+                  <button id="genPuny" class="btn">Generate 10 punycode variants</button>
+                  <button id="morePuny" class="ghost">Generate more</button>
+                  <button id="copyPunyList" class="ghost">Copy List</button>
+                </div>
+                <div class="table-results" style="margin-top:8px"><table id="punyResults"><thead><tr><th>Variant</th><th>Punycode</th><th></th></tr></thead><tbody></tbody></table></div>
+              </div>
+
+              <button id="openMakeTypo" class="btn" style="background:linear-gradient(90deg,var(--accent),var(--accent2))">Make typosquatting domains</button>
+              <div id="makeTypoPanel" style="display:none;margin-top:8px">
+                <input id="makeTypoInput" class="quick-input" placeholder="Enter domain (e.g. example.com)" />
+                <div style="display:flex;gap:8px;margin-top:8px">
+                  <button id="genTypo" class="btn">Generate 10 typosquats</button>
+                  <button id="moreTypo" class="ghost">Generate more</button>
+                  <button id="copyTypoList" class="ghost">Copy List</button>
+                </div>
+                <div class="table-results" style="margin-top:8px"><table id="typoResults"><thead><tr><th>Variant</th><th>Punycode</th><th></th></tr></thead><tbody></tbody></table></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-bottom:12px">
+            <strong>How it works</strong>
+            <p class="small" style="margin-top:8px">The app normalizes text (NFC), examines each character's Unicode code point, uses a small confusable map to spot likely homoglyphs, and generates variants by substituting similar-looking characters. Punycode detection looks for <code>xn--</code> labels. The quick tools help you create test variants for awareness or takedown requests.</p>
+          </div>
+
+          <div class="panel">
+            <strong>Export</strong>
+            <p class="small" style="margin-top:8px">Copy results or export JSON reports for sharing.</p>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button id="copyReport" class="btn">Copy JSON</button>
+              <button id="downloadReport" class="btn">Download</button>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <footer>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="small">
+  Made with ❤️ — Free open resource. Connect with me<a href="https://www.linkedin.com/in/subhash-thapa/" target="_blank" style="text-decoration: none;">
+    <img src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/linkedin.svg" alt="LinkedIn" style="width:16px;height:16px;vertical-align:middle;margin-left:4px;filter: invert(1);">
+  </a>
+</div>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <script>
+  document.addEventListener('DOMContentLoaded',()=>{
+
+// ---- confusables (expanded, still partial) ----
+const CONFUSABLES = {
+  'a':['а','à','á','â','ä','ã','å','ɑ','ạ','æ'],
+  'b':['Ь','ɓ','Ƅ','ƅ'],
+  'c':['с','ç','¢','ϲ','ᴄ','ɔ'],
+  'd':['ԁ','ԃ','ɗ','đ'],
+  'e':['е','ε','ë','é','è','℮','ℯ'],
+  'f':['ſ','ғ','ƒ'],
+  'g':['ɡ','ǥ','ɢ','ğ'],
+  'h':['һ','н','Һ','ʜ'],
+  'i':['і','ı','ɩ','í','ï','ỉ','¡','ⅼ'],
+  'j':['ј','ʝ','ɉ'],
+  'k':['κ','ķ','ᴋ','ƙ'],
+  'l':['1','ⅼ','ɩ','ĺ','ӏ','|','∣','︱'],
+  'm':['rn','м','ṃ'],
+  'n':['п','ᴎ','ṅ'],
+  'o':['о','ο','0','ö','ó','ò','ô','õ','ɵ','ө','¤'],
+  'p':['р','ρ','ƿ'],
+  'q':['ɋ','զ'],
+  'r':['ɾ','г','ᴦ'],
+  's':['ѕ','ś','ş','ʂ','§','$'],
+  't':['τ','ţ','ŧ','т'],
+  'u':['µ','υ','ս','ư','ů'],
+  'v':['ν','ѵ','ṽ'],
+  'w':['vv','ш','ԝ','ẇ'],
+  'x':['х','ẋ','×','✕','✖'],
+  'y':['у','ý','γ','ỵ'],
+  'z':['ʐ','ž','ʑ','ƶ']
+};
+
+    // ---- punycode decode ----
+    function decodePunycode(input) {
+      if (!input.includes('xn--')) return input;
+      try {
+        return input.split('.').map(label => {
+          if (label.startsWith('xn--')) {
+            return punycodeDecode(label.substring(4));
+          }
+          return label;
+        }).join('.');
+      } catch(e) {
+        return input;
+      }
+    }
+
+    function punycodeDecode(input) {
+      const base = 36, tMin = 1, tMax = 26, skew = 38, damp = 700, initialBias = 72, initialN = 128;
+      let n = initialN, i = 0, bias = initialBias, output = [];
+      const lastDelim = input.lastIndexOf('-');
+      if (lastDelim > -1) {
+        for (let j=0; j<lastDelim; j++) output.push(input[j]);
+        input = input.slice(lastDelim+1);
+      }
+      while (input.length) {
+        let oldi = i, w = 1;
+        for (let k=base;;k+=base) {
+          const digit = basicToDigit(input[0].charCodeAt(0));
+          input = input.slice(1);
+          i += digit * w;
+          let t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
+          if (digit < t) break;
+          w *= (base - t);
+        }
+        const outLen = output.length+1;
+        bias = adapt(i-oldi, outLen, oldi==0);
+        n += Math.floor(i/outLen);
+        i = i % outLen;
+        output.splice(i,0,String.fromCodePoint(n));
+        i++;
+      }
+      return output.join('');
+
+      function basicToDigit(code) {
+        if (code-48 < 10) return code-22;
+        if (code-65 < 26) return code-65;
+        if (code-97 < 26) return code-97;
+        return base;
+      }
+      function adapt(delta, numPoints, firstTime) {
+        delta = firstTime ? Math.floor(delta/damp) : delta>>1;
+        delta += Math.floor(delta/numPoints);
+        let k=0;
+        while(delta>((base-tMin)*tMax)>>1){
+          delta=Math.floor(delta/(base-tMin));
+          k+=base;
+        }
+        return k+Math.floor((base-tMin+1)*delta/(delta+skew));
+      }
+    }
+
+    // ---- helpers ----
+    const domainInput = document.getElementById('domainInput');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const normalizedEl = document.getElementById('normalized');
+    const punycodeEl = document.getElementById('punycode');
+    const charsTbody = document.querySelector('#charsTable tbody');
+    const variantsEl = document.getElementById('variants');
+    const suspicionScoreEl = document.getElementById('suspicionScore');
+    const checkHomoglyph = document.getElementById('checkHomoglyph');
+    const checkPunycode = document.getElementById('checkPunycode');
+    const charSection = document.getElementById('charSection');
+    const variantsSection = document.getElementById('variantsSection');
+    const statusWrap = document.getElementById('statusWrap');
+
+    // Quick tools elements
+    const openMakeHomoglyph = document.getElementById('openMakeHomoglyph');
+    const makeHomoglyphPanel = document.getElementById('makeHomoglyphPanel');
+    const genHomoglyphs = document.getElementById('genHomoglyphs');
+    const moreHomoglyphs = document.getElementById('moreHomoglyphs');
+    const makeHomInput = document.getElementById('makeHomInput');
+    const homResultsTbody = document.querySelector('#homResults tbody');
+    const copyHomList = document.getElementById('copyHomList');
+
+    const openMakePuny = document.getElementById('openMakePuny');
+    const makePunyPanel = document.getElementById('makePunyPanel');
+    const genPuny = document.getElementById('genPuny');
+    const morePuny = document.getElementById('morePuny');
+    const makePunyInput = document.getElementById('makePunyInput');
+    const punyResultsTbody = document.querySelector('#punyResults tbody');
+    const copyPunyList = document.getElementById('copyPunyList');
+
+    const openMakeTypo = document.getElementById('openMakeTypo');
+    const makeTypoPanel = document.getElementById('makeTypoPanel');
+    const genTypo = document.getElementById('genTypo');
+    const moreTypo = document.getElementById('moreTypo');
+    const makeTypoInput = document.getElementById('makeTypoInput');
+    const typoResultsTbody = document.querySelector('#typoResults tbody');
+    const copyTypoList = document.getElementById('copyTypoList');
+
+    const copyReport = document.getElementById('copyReport');
+    const downloadReport = document.getElementById('downloadReport');
+
+    function toNFC(str){ return str && str.normalize ? str.normalize('NFC') : (str||'') }
+
+    function extractHostname(input){
+      if(!input) return '';
+      input = input.trim();
+      try{
+        const url = new URL(input.includes('://')? input : 'http://'+input);
+        return url.hostname;
+      }catch(e){
+        return input.split('/')[0].split(':')[0];
+      }
+    }
+
+    function isPunycode(domain){
+      return domain.split('.').some(lbl=>lbl.toLowerCase().startsWith('xn--'));
+    }
+
+    function toASCII(domain){
+      domain = extractHostname(domain);
+      if(!domain) return '';
+      try{ return new URL('http://'+domain).hostname }catch(e){ return domain }
+    }
+
+    function codePoints(str){
+      const arr = [];
+      for(const ch of Array.from(str)){
+        arr.push('U+'+ch.codePointAt(0).toString(16).toUpperCase().padStart(4,'0'));
+      }
+      return arr.join(' ');
+    }
+
+    function analyze(domainRaw){
+      const hostname = extractHostname(domainRaw);
+      const normalized = toNFC(hostname);
+      const labels = normalized.split('.');
+      const rows = [];
+      let score = 0;
+      let foundConfusable = false;
+      labels.forEach(lbl=>{
+        for(const ch of Array.from(lbl)){
+          const cp = 'U+'+ch.codePointAt(0).toString(16).toUpperCase().padStart(4,'0');
+          let category = 'ASCII';
+          if(ch.charCodeAt(0) > 127) category = 'Non-ASCII';
+          let suspicious = false;
+          for(const base in CONFUSABLES){ if(CONFUSABLES[base].includes(ch)) suspicious = true }
+          if(suspicious){ category = 'Confusable'; foundConfusable = true; score += 2 }
+          else if(category==='Non-ASCII') score += 1;
+          rows.push({char: ch, cps: cp, category, suspicious});
+        }
+      });
+      const puny = isPunycode(normalized);
+      return {hostname: normalized, rows, score, foundConfusable, puny};
+    }
+
+    function generateVariants(domain, maxResults=12){
+      const base = Array.from(domain);
+      const variants = new Set();
+      for(let i=0;i<base.length;i++){
+        const ch = base[i].toLowerCase();
+        for(const key in CONFUSABLES){
+          if(key === ch){
+            for(const sub of CONFUSABLES[key]){
+              const copy = base.slice(); copy[i] = sub; variants.add(copy.join(''));
+            }
+          }
+        }
+      }
+      const joined = base.join('');
+      variants.add(joined.replace(/rn/gi,'m'));
+      variants.add(joined.replace(/m/gi,'rn'));
+      variants.add(joined.replace(/o/gi,'0'));
+      variants.add(joined.replace(/l/gi,'1'));
+      return Array.from(variants).filter(v=>v!==domain).slice(0,maxResults);
+    }
+
+    // Typosquatting generator - common tricks
+    function generateTypos(domain, maxResults=1000){
+      // domain: "example.com" or "example"
+      const host = extractHostname(domain);
+      if(!host) return [];
+      const parts = host.split('.');
+      const name = parts.shift();
+      const tld = parts.join('.');
+      const tricks = new Set();
+
+      // 1) drop each char
+      for(let i=0;i<name.length;i++){ tricks.add(name.slice(0,i)+name.slice(i+1)); }
+      // 2) double each char
+      for(let i=0;i<name.length;i++){ tricks.add(name.slice(0,i)+name[i]+name[i]+name.slice(i+1)); }
+      // 3) swap adjacent
+      for(let i=0;i<name.length-1;i++){ tricks.add(name.slice(0,i)+name[i+1]+name[i]+name.slice(i+2)); }
+      // 4) replace with visually-similar ASCII substitutions (simple set)
+      const subs = {'o':'0','l':'1','i':'1','s':'5','e':'3','a':'@','t':'7','b':'8','g':'9'};
+      for(let i=0;i<name.length;i++){
+        const ch = name[i].toLowerCase();
+        if(subs[ch]) tricks.add(name.slice(0,i)+subs[ch]+name.slice(i+1));
+      }
+      // 5) common prefix/suffix (typo domains)
+      ['-','_','-www','www-','shop-','app-','login-'].forEach(pref=>{
+        tricks.add(pref+name);
+        tricks.add(name+pref);
+      });
+      // 6) add single-char insertions (a-z)
+      const letters = 'abcdefghijklmnopqrstuvwxyz';
+      for(let i=0;i<Math.min(4,name.length);i++){ // limit insertions to avoid explosion
+        for(const L of letters){ tricks.add(name.slice(0,i)+L+name.slice(i)); }
+      }
+
+      // combine with tld if present
+      const variants = Array.from(tricks).map(v=> v + (tld?'.'+tld:'') );
+      // filter out identical
+      const filtered = variants.filter(v => v !== host);
+      return filtered.slice(0, maxResults);
+    }
+
+    function renderStatus(score, puny){
+      statusWrap.innerHTML = '';
+      const span = document.createElement('div'); span.className='status';
+      if(puny){ span.classList.add('bad'); span.textContent = '❌ Punycode detected (xn--)'; }
+      else if(score>3){ span.classList.add('bad'); span.textContent = '❌ High suspicious (homoglyph likely)'; }
+      else if(score>0){ span.classList.add('warn'); span.textContent = '⚠️ Suspicious characters found'; }
+      else { span.classList.add('safe'); span.textContent = '✅ Looks ASCII / clean'; }
+      statusWrap.appendChild(span);
+    }
+
+    function renderAnalysis(domainRaw){
+      if(!domainRaw) return;
+      const {hostname, rows, score, foundConfusable, puny} = analyze(domainRaw);
+      let decodedHost = hostname;
+      if(isPunycode(hostname)){
+        decodedHost = decodePunycode(hostname);
+      }
+      normalizedEl.textContent = decodedHost || '—';
+      punycodeEl.textContent = checkPunycode.checked ? (isPunycode(hostname) ? hostname : toASCII(hostname)) : 'Disabled';
+      renderStatus(score, puny);
+
+      if(checkHomoglyph.checked){
+        charsTbody.innerHTML = '';
+        rows.forEach(r=>{
+          const tr = document.createElement('tr');
+          const td1 = document.createElement('td'); td1.textContent = r.char; td1.style.cursor='pointer';
+          const td2 = document.createElement('td'); td2.textContent = r.cps;
+          const td3 = document.createElement('td'); td3.textContent = r.category; if(r.suspicious) td3.className='danger';
+          tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
+          tr.addEventListener('click',()=>{ navigator.clipboard && navigator.clipboard.writeText(r.char).then(()=>{ td1.style.opacity=0.6; setTimeout(()=>td1.style.opacity=1,700); }); });
+          charsTbody.appendChild(tr);
+        });
+        suspicionScoreEl.textContent = 'Score: '+score;
+        charSection.style.display = 'block';
+        variantsSection.style.display = 'block';
+        const variants = generateVariants(hostname, 20);
+        variantsEl.innerHTML = '';
+        variants.forEach(v=>{
+          const node = document.createElement('div'); node.className='variant';
+          const left = document.createElement('div'); left.textContent = v;
+          const right = document.createElement('div');
+          const copyBtn = document.createElement('button'); copyBtn.className='btn'; copyBtn.textContent='Copy';
+          copyBtn.addEventListener('click',()=>{ navigator.clipboard && navigator.clipboard.writeText(v).then(()=>{ copyBtn.textContent='✔ Copied!'; setTimeout(()=>copyBtn.textContent='Copy',1500);}); });
+          const punyLabel = document.createElement('div'); punyLabel.style.fontSize='12px'; punyLabel.style.marginRight='8px'; punyLabel.textContent = toASCII(v);
+          right.appendChild(punyLabel); right.appendChild(copyBtn);
+          node.appendChild(left); node.appendChild(right);
+          variantsEl.appendChild(node);
+        });
+      } else {
+        charSection.style.display = 'none';
+        variantsSection.style.display = 'none';
+      }
+    }
+
+    analyzeBtn.addEventListener('click', ()=>{ if(domainInput.value) renderAnalysis(domainInput.value); });
+    domainInput.addEventListener('keydown', e=>{ if(e.key==='Enter' && domainInput.value) renderAnalysis(domainInput.value); });
+
+    openMakeHomoglyph.addEventListener('click', ()=>{ makeHomoglyphPanel.style.display = makeHomoglyphPanel.style.display==='none'?'block':'none' });
+    openMakePuny.addEventListener('click', ()=>{ makePunyPanel.style.display = makePunyPanel.style.display==='none'?'block':'none' });
+    openMakeTypo.addEventListener('click', ()=>{ makeTypoPanel.style.display = makeTypoPanel.style.display==='none'?'block':'none' });
+
+    // ---- Quick tool paging / caching ----
+    const MAX_RESULTS = 1000;
+    const PAGE_SIZE = 10;
+
+    // caches and offsets
+    const homCache = {domain:'', items:[] , offset:0};
+    const punyCache = {domain:'', items:[] , offset:0};
+    const typoCache = {domain:'', items:[] , offset:0};
+
+    function resetCache(cache){
+      cache.domain=''; cache.items=[]; cache.offset=0;
+    }
+
+    function appendRowsToTable(tbody, variants, perRowCopyUsesPuny=false){
+      variants.forEach(v=>{
+        const tr = document.createElement('tr');
+        const td1 = document.createElement('td'); td1.textContent = v;
+        const td2 = document.createElement('td'); td2.textContent = toASCII(v);
+        const td3 = document.createElement('td');
+        const c = document.createElement('button'); c.className='btn'; c.textContent='Copy';
+        c.addEventListener('click', ()=>{
+          const textToCopy = perRowCopyUsesPuny ? toASCII(v) : v;
+          navigator.clipboard && navigator.clipboard.writeText(textToCopy).then(()=>{
+            const old = c.textContent; c.textContent='✔ Copied!'; setTimeout(()=>c.textContent=old,1500);
+          });
+        });
+        td3.appendChild(c);
+        tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
+        tbody.appendChild(tr);
+      });
+    }
+
+    // HOMOGLYPH: generate first page or reset+generate
+    genHomoglyphs.addEventListener('click', ()=>{
+      const domain = extractHostname(makeHomInput.value || '');
+      if(!domain) return alert('Enter a domain to generate variants');
+      // build full cache once
+      if(homCache.domain !== domain || homCache.items.length===0){
+        homCache.domain = domain;
+        // generate up to MAX_RESULTS (but generateVariants produces up to requested number)
+        // We'll produce a large list by calling generateVariants with a larger limit repeatedly if needed.
+        homCache.items = Array.from(new Set(generateVariants(domain, 200).concat(generateVariants(domain, 200)))).slice(0, MAX_RESULTS);
+        // if cache ended up empty, fall back to simple transform
+        if(homCache.items.length===0){
+          homCache.items = [domain];
+        }
+      }
+      homCache.offset = 0;
+      homResultsTbody.innerHTML='';
+      const slice = homCache.items.slice(homCache.offset, homCache.offset + PAGE_SIZE);
+      appendRowsToTable(homResultsTbody, slice, false);
+      homCache.offset += slice.length;
+      if(homCache.offset >= MAX_RESULTS) moreHomoglyphs.disabled = true;
+      else moreHomoglyphs.disabled = false;
+    });
+
+    moreHomoglyphs.addEventListener('click', ()=>{
+      if(homCache.offset >= MAX_RESULTS){ alert('Reached maximum of '+MAX_RESULTS); return; }
+      if(!homCache.items.length) return alert('Click "Generate 10 variants" first');
+      const slice = homCache.items.slice(homCache.offset, homCache.offset + PAGE_SIZE);
+      appendRowsToTable(homResultsTbody, slice, false);
+      homCache.offset += slice.length;
+      if(homCache.offset >= MAX_RESULTS) moreHomoglyphs.disabled = true;
+    });
+
+    // PUNY: same behavior
+    genPuny.addEventListener('click', ()=>{
+      const domain = extractHostname(makePunyInput.value || '');
+      if(!domain) return alert('Enter a domain to generate punycode variants');
+      if(punyCache.domain !== domain || punyCache.items.length===0){
+        punyCache.domain = domain;
+        // build variants via generateVariants (confusable substitutions)
+        punyCache.items = Array.from(new Set(generateVariants(domain, 200).concat(generateVariants(domain, 200)))).slice(0, MAX_RESULTS);
+        if(punyCache.items.length===0){
+          punyCache.items = [domain];
+        }
+      }
+      punyCache.offset = 0;
+      punyResultsTbody.innerHTML='';
+      const slice = punyCache.items.slice(punyCache.offset, punyCache.offset + PAGE_SIZE);
+      appendRowsToTable(punyResultsTbody, slice, true); // copy should copy punycode (per previous behavior)
+      punyCache.offset += slice.length;
+      if(punyCache.offset >= MAX_RESULTS) morePuny.disabled = true;
+      else morePuny.disabled = false;
+    });
+
+    morePuny.addEventListener('click', ()=>{
+      if(punyCache.offset >= MAX_RESULTS){ alert('Reached maximum of '+MAX_RESULTS); return; }
+      if(!punyCache.items.length) return alert('Click "Generate 10 punycode variants" first');
+      const slice = punyCache.items.slice(punyCache.offset, punyCache.offset + PAGE_SIZE);
+      appendRowsToTable(punyResultsTbody, slice, true);
+      punyCache.offset += slice.length;
+      if(punyCache.offset >= MAX_RESULTS) morePuny.disabled = true;
+    });
+
+    // TYPO: generate typosquats
+    genTypo.addEventListener('click', ()=>{
+      const domain = extractHostname(makeTypoInput.value || '');
+      if(!domain) return alert('Enter a domain to generate typos');
+      if(typoCache.domain !== domain || typoCache.items.length===0){
+        typoCache.domain = domain;
+        typoCache.items = generateTypos(domain, MAX_RESULTS);
+        if(typoCache.items.length===0) typoCache.items = [domain];
+      }
+      typoCache.offset = 0;
+      typoResultsTbody.innerHTML='';
+      const slice = typoCache.items.slice(typoCache.offset, typoCache.offset + PAGE_SIZE);
+      appendRowsToTable(typoResultsTbody, slice, false);
+      typoCache.offset += slice.length;
+      if(typoCache.offset >= MAX_RESULTS) moreTypo.disabled = true;
+      else moreTypo.disabled = false;
+    });
+
+    moreTypo.addEventListener('click', ()=>{
+      if(typoCache.offset >= MAX_RESULTS){ alert('Reached maximum of '+MAX_RESULTS); return; }
+      if(!typoCache.items.length) return alert('Click "Generate 10 typosquats" first');
+      const slice = typoCache.items.slice(typoCache.offset, typoCache.offset + PAGE_SIZE);
+      appendRowsToTable(typoResultsTbody, slice, false);
+      typoCache.offset += slice.length;
+      if(typoCache.offset >= MAX_RESULTS) moreTypo.disabled = true;
+    });
+
+    // Copy list buttons with feedback
+    copyHomList.addEventListener('click', ()=>{
+      const rows = Array.from(document.querySelectorAll('#homResults tbody tr td:first-child')).map(td=>td.textContent);
+      if(rows.length===0) return alert('No results to copy');
+      navigator.clipboard && navigator.clipboard.writeText(rows.join('\n')).then(()=>{ const old = copyHomList.textContent; copyHomList.textContent='✔ Copied!'; setTimeout(()=>copyHomList.textContent=old,1500);});
+    });
+    copyPunyList.addEventListener('click', ()=>{
+      const rows = Array.from(document.querySelectorAll('#punyResults tbody tr td:nth-child(2)')).map(td=>td.textContent);
+      if(rows.length===0) return alert('No results to copy');
+      navigator.clipboard && navigator.clipboard.writeText(rows.join('\n')).then(()=>{ const old = copyPunyList.textContent; copyPunyList.textContent='✔ Copied!'; setTimeout(()=>copyPunyList.textContent=old,1500);});
+    });
+    copyTypoList.addEventListener('click', ()=>{
+      const rows = Array.from(document.querySelectorAll('#typoResults tbody tr td:first-child')).map(td=>td.textContent);
+      if(rows.length===0) return alert('No results to copy');
+      navigator.clipboard && navigator.clipboard.writeText(rows.join('\n')).then(()=>{ const old = copyTypoList.textContent; copyTypoList.textContent='✔ Copied!'; setTimeout(()=>copyTypoList.textContent=old,1500);});
+    });
+
+    copyReport.addEventListener('click', ()=>{
+      const report = buildReport(); navigator.clipboard && navigator.clipboard.writeText(JSON.stringify(report, null, 2)).then(()=>{ copyReport.textContent='✔ Copied!'; setTimeout(()=>copyReport.textContent='Copy JSON',1500); });
+    });
+    downloadReport.addEventListener('click', ()=>{
+      const report = buildReport(); const blob = new Blob([JSON.stringify(report, null, 2)],{type:'application/json'});
+      const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'homoglyph-report.json'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    function buildReport(){
+      const input = domainInput.value || '';
+      const {hostname, rows, score, foundConfusable, puny} = analyze(input);
+      return { input, hostname, punycode: toASCII(hostname), score, foundConfusable, puny, characters: rows, generated_at: new Date().toISOString() };
+    }
+
+    // Toggle suspicious variants expand/collapse
+    const variantsHeader = document.getElementById('variantsHeader');
+    const variantsContent = document.getElementById('variantsContent');
+    const variantsToggleLabel = document.getElementById('variantsToggleLabel');
+    if(variantsHeader){
+      variantsHeader.addEventListener('click', ()=>{
+        if(variantsContent.style.display==='none'){
+          variantsContent.style.display='block';
+          variantsToggleLabel.textContent = 'Click to collapse ▲';
+        } else {
+          variantsContent.style.display='none';
+          variantsToggleLabel.textContent = 'Click to expand ▼';
+        }
+      });
+    }
+
+    domainInput.placeholder = 'Enter a domain (e.g. example.com or xn--...)';
+  });
+  </script>
+</body>
+</html>
